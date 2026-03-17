@@ -23,7 +23,7 @@ export interface HabitsResponse {
 }
 
 export const api = {
-  analyze: async (situation: string, mode: string = "offline", financial_stability: number = 5.0) => {
+  analyze: async (situation: string, mode: string = "online", financial_stability: number = 5.0) => {
     const res = await apiClient.post<AnalyzeResponse>("/analyze", {
       situation,
       mode,
