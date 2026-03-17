@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --color-harvey-dark: #0a0a14;
+  --color-harvey-panel: rgba(20, 20, 35, 0.6);
+  --color-harvey-gold: #c9a84c;
+  --color-harvey-cyan: #0ff;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-harvey-dark);
+  color: #eeeeee;
+  margin: 0;
+  overflow: hidden; /* Lock the screen for the 3D dashboard */
+  font-family: 'Inter', sans-serif;
+  user-select: none;
+}
+
+/* ── Custom Utilities ──────────────────────────────────────────────────────── */
+
+.glass-panel {
+  background: var(--color-harvey-panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.glass-panel:hover {
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: 0 0 20px rgba(201, 168, 76, 0.15);
+}
+
+.holographic-text {
+  color: var(--color-harvey-cyan);
+  text-shadow: 0 0 8px rgba(0, 255, 255, 0.6);
+  font-family: monospace;
+}
+
+/* ── Scanline Effect ───────────────────────────────────────────────────────── */
+.scanlines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0) 50%,
+    rgba(0, 0, 0, 0.1) 50%,
+    rgba(0, 0, 0, 0.1)
+  );
+  background-size: 100% 4px;
+  z-index: 50;
+  opacity: 0.3;
+}

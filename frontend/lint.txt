@@ -1,0 +1,103 @@
+
+> frontend@0.1.0 lint
+> eslint
+
+
+D:\harvey_os\frontend\src\app\page.tsx
+    6:1   error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  108:14  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+D:\harvey_os\frontend\src\components\DecisionTimeline.tsx
+  24:11  warning  'curve' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  48:20  warning  'delta' is defined but never used           @typescript-eslint/no-unused-vars
+
+D:\harvey_os\frontend\src\components\NeuralThinking.tsx
+  18:21  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\harvey_os\frontend\src\components\NeuralThinking.tsx:18:21
+  16 |     for (let i = 0; i < particleCount; i++) {
+  17 |         // Random spread around the core
+> 18 |       pos[i * 3] = (Math.random() - 0.5) * 8;
+     |                     ^^^^^^^^^^^^^ Cannot call impure function
+  19 |       pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
+  20 |       pos[i * 3 + 2] = (Math.random() - 0.5) * 8;
+  21 |       ph[i] = Math.random() * Math.PI * 2;                                                                                                                                                                                                                                                                                                                                                        react-hooks/purity
+  19:25  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\harvey_os\frontend\src\components\NeuralThinking.tsx:19:25
+  17 |         // Random spread around the core
+  18 |       pos[i * 3] = (Math.random() - 0.5) * 8;
+> 19 |       pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
+     |                         ^^^^^^^^^^^^^ Cannot call impure function
+  20 |       pos[i * 3 + 2] = (Math.random() - 0.5) * 8;
+  21 |       ph[i] = Math.random() * Math.PI * 2;
+  22 |     }                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/purity
+  20:25  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\harvey_os\frontend\src\components\NeuralThinking.tsx:20:25
+  18 |       pos[i * 3] = (Math.random() - 0.5) * 8;
+  19 |       pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
+> 20 |       pos[i * 3 + 2] = (Math.random() - 0.5) * 8;
+     |                         ^^^^^^^^^^^^^ Cannot call impure function
+  21 |       ph[i] = Math.random() * Math.PI * 2;
+  22 |     }
+  23 |     return [pos, ph];                                                                                                                                                                                                                                                                                                                                                                                                               react-hooks/purity
+  21:15  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\harvey_os\frontend\src\components\NeuralThinking.tsx:21:15
+  19 |       pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
+  20 |       pos[i * 3 + 2] = (Math.random() - 0.5) * 8;
+> 21 |       ph[i] = Math.random() * Math.PI * 2;
+     |               ^^^^^^^^^^^^^ Cannot call impure function
+  22 |     }
+  23 |     return [pos, ph];
+  24 |   }, []);                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/purity
+  47:42  error  Error: Cannot access variable before it is declared
+
+`clampRadius` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+D:\harvey_os\frontend\src\components\NeuralThinking.tsx:47:42
+  45 |         const radius = Math.sqrt(x*x + z*z);
+  46 |         
+> 47 |         array[i * 3] = Math.cos(angle) * clampRadius(radius + Math.sin(state.clock.elapsedTime * 5 + phases[i]) * 0.05);
+     |                                          ^^^^^^^^^^^ `clampRadius` accessed before it is declared
+  48 |         array[i * 3 + 1] += Math.sin(state.clock.elapsedTime * 3 + phases[i]) * 0.02;
+  49 |         array[i * 3 + 2] = Math.sin(angle) * clampRadius(radius + Math.cos(state.clock.elapsedTime * 5 + phases[i]) * 0.05);
+  50 |       }
+
+D:\harvey_os\frontend\src\components\NeuralThinking.tsx:55:3
+  53 |   });
+  54 |
+> 55 |   const clampRadius = (r: number) => Math.max(1.5, Math.min(r, 6));
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `clampRadius` is declared here
+  56 |
+  57 |   return (
+  58 |     <points ref={pointsRef}>  react-hooks/immutability
+
+D:\harvey_os\frontend\src\components\ThreatDetection.tsx
+  3:18  warning  'useMemo' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\harvey_os\frontend\src\components\VoiceInterface.tsx
+  36:37  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\harvey_os\frontend\src\components\VoiceInterface.tsx:36:37
+  34 |                   }}
+  35 |                   transition={{
+> 36 |                     duration: 0.6 + Math.random() * 0.4,
+     |                                     ^^^^^^^^^^^^^ Cannot call impure function
+  37 |                     repeat: Infinity,
+  38 |                     ease: "easeInOut",
+  39 |                     delay: i * 0.1,  react-hooks/purity
+
+Γ£û 11 problems (8 errors, 3 warnings)
+
