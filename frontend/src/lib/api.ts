@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Axios client connected to the existing FastAPI backend
 const apiClient = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "https://harvey-os.onrender.com",
   timeout: 10000,
 });
 
