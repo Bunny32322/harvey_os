@@ -1,12 +1,12 @@
 """
-Harvey OS – Leverage Score Engine
+Harvey OS – Leverage Score Engine (v2 – SQLite-backed)
 Computes a composite 0–10 score reflecting the user's current strategic leverage.
 """
 
-import json
-from pathlib import Path
+from __future__ import annotations
 
-from config.settings import HABITS_FILE
+from core.database import get_db
+
 
 # ── Weight mapping (total = 1.0) ───────────────────────────────────────────
 _WEIGHTS = {
@@ -28,30 +28,39 @@ _MAX_VALUES = {
 
 
 class LeverageScorer:
-    """Calculate and explain the user's leverage score (0–10)."""
+    """Calculate and explain the user's leverage score (0–10). SQLite-backed."""
 
-    def __init__(self, habits_path: Path | None = None):
-        self.path = habits_path or HABITS_FILE
+    def __init__(self):
         self.habits = self._load()
 
     def _load(self) -> dict:
-        try:
-            with open(self.path, "r", encoding="utf-8") as fh:
-                return json.load(fh)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {k: 0 for k in _WEIGHTS}
+        """Load habits from SQLite."""
+        db = get_db()
+        rows = db.execute("SELECT key, value FROM habits").fetchall()
+        data = {r["key"]: r["value"] for r in rows}
+        # Ensure all habit keys exist
+        for k in _WEIGHTS:
+            if k != "financial_stability":
+                data.setdefault(k, 0)
+        return data
 
     def save(self, habits: dict) -> None:
-        """Persist updated habits to disk."""
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as fh:
-            json.dump(habits, fh, indent=4)
+        """Persist updated habits to SQLite."""
+        db = get_db()
+        for key, value in habits.items():
+            db.execute(
+                """INSERT INTO habits (key, value, updated_at)
+                   VALUES (?, ?, datetime('now'))
+                   ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')""",
+                (key, float(value), float(value)),
+            )
+        db.commit()
         self.habits = habits
 
     def score(self, financial_stability: float = 5.0) -> float:
         """
         Return a composite leverage score (0–10).
-        *financial_stability* is supplied separately (not in habits.json).
+        *financial_stability* is supplied separately.
         """
         values = {**self.habits, "financial_stability": financial_stability}
         total = 0.0

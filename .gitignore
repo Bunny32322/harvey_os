@@ -5,4 +5,9 @@ __pycache__/
 data/memory.json
 data/*.db
 data/*.sqlite3
+data/chromadb/
+data/vector.index
+data/vector_store.pkl
 .DS_Store
+node_modules/
+frontend/.next/

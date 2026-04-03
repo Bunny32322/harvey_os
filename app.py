@@ -1,9 +1,8 @@
 """
-HARVEY OS – Hybrid Strategic AI Command Center
-Streamlit dashboard with 10 tabs for strategic analysis, habit tracking,
-profile management, daily reflections, decision tracking, scenario
-simulation, board-of-directors mode, trajectory forecasting,
-weekly reports, and conversation training.
+HARVEY OS – Hybrid Strategic AI Command Center (v2)
+Streamlit dashboard with 12 tabs: strategic analysis, habits, profile,
+reflections, decisions, scenarios, board mode, trajectory, reports,
+conversation training, conversation threads, and episodic memory.
 """
 
 import sys
@@ -30,11 +29,13 @@ from core.personality import get_personality_prompt, list_modes, get_mode_info, 
 from core.learning import DecisionLearner
 from core.reporting import ReportEngine
 from core.conversation_training import ConversationTrainer
+from core.conversation_memory import ConversationMemory
+from core.episodic_memory import EpisodicMemory, EMOTIONS, CATEGORIES
 from core import vector_store
 
 # ── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="HARVEY OS",
+    page_title="HARVEY OS v2",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -53,8 +54,8 @@ if css_path.exists():
 def render_sidebar() -> tuple:
     """Render sidebar controls and return (Brain, personality_mode)."""
     with st.sidebar:
-        st.markdown("# ⚖️ HARVEY OS")
-        st.caption("Hybrid Strategic AI Command Center")
+        st.markdown("# ⚖️ HARVEY OS v2")
+        st.caption("Beyond Jarvis – Strategic AI Command Center")
         st.divider()
 
         # AI mode
@@ -93,6 +94,16 @@ def render_sidebar() -> tuple:
         lev = scorer.score(financial)
         st.metric("Leverage Score", f"{lev}/10")
 
+        # Memory stats
+        conv_memory = ConversationMemory()
+        conv_stats = conv_memory.stats()
+        st.metric("Conversation Threads", conv_stats["total_threads"])
+        st.metric("Total Messages", conv_stats["total_messages"])
+
+        episodes = EpisodicMemory()
+        ep_stats = episodes.stats()
+        st.metric("Life Episodes", ep_stats["total_episodes"])
+
         st.divider()
 
         # Voice toggle
@@ -100,7 +111,7 @@ def render_sidebar() -> tuple:
                                     help="Enable spoken input/output (requires mic)")
 
         st.divider()
-        st.caption("Built with 🏛 by Harvey OS")
+        st.caption("Built with 🏛 by Harvey OS v2")
 
     return brain, personality, voice_enabled
 
@@ -142,7 +153,20 @@ def voice_output(text: str) -> None:
 
 def tab_strategic_engine(brain: Brain, personality: str, voice: bool):
     st.header("🎯 Strategic Engine")
-    st.markdown("Enter a situation and receive a full strategic analysis powered by your AI brain, vector memory, and leverage score.")
+    st.markdown("Enter a situation and receive a full strategic analysis powered by your AI brain, vector memory, episodic memory, and leverage score.")
+
+    # Thread selection
+    conv_memory = ConversationMemory()
+    threads = conv_memory.list_threads(limit=20)
+    thread_options = ["🆕 New Thread"] + [
+        f"{t['title'][:50]} ({t['id'][:8]}…)" for t in threads
+    ]
+    selected = st.selectbox("💬 Conversation Thread", thread_options, key="engine_thread")
+
+    thread_id = None
+    if selected != "🆕 New Thread":
+        idx = thread_options.index(selected) - 1
+        thread_id = threads[idx]["id"]
 
     # Voice input option
     situation = ""
@@ -180,7 +204,17 @@ def tab_strategic_engine(brain: Brain, personality: str, voice: bool):
             original_prompt = brain._system_prompt
             brain._system_prompt = f"{original_prompt}\n\n{pers_prompt}"
 
-            result = engine.analyze(situation, financial_stability=fin)
+            # Create thread if new
+            if not thread_id:
+                thread_id = brain.start_thread(
+                    title=situation[:80], tag="strategic_engine"
+                )
+
+            result = engine.analyze(
+                situation,
+                financial_stability=fin,
+                thread_id=thread_id,
+            )
 
             # Restore original
             brain._system_prompt = original_prompt
@@ -191,6 +225,7 @@ def tab_strategic_engine(brain: Brain, personality: str, voice: bool):
 
         st.markdown("---")
         st.markdown(result)
+        st.caption(f"🧵 Thread: {thread_id[:8]}…")
 
         if voice:
             voice_output(result)
@@ -264,11 +299,11 @@ def tab_profile_setup():
         profile.save()
         st.success("Profile saved!")
 
-    patterns = profile.get("patterns", [])
+    patterns = profile.get_pattern_counts()
     if patterns:
         st.markdown("### Detected Patterns")
-        for p in patterns:
-            st.markdown(f"• {p.replace('_', ' ').title()}")
+        for p, count in patterns.items():
+            st.markdown(f"• {p.replace('_', ' ').title()} (detected {count}x)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -277,13 +312,20 @@ def tab_profile_setup():
 
 def tab_daily_reflection():
     st.header("📝 Daily Reflection")
-    st.markdown("Log your thoughts. Harvey OS will analyze them for psychological patterns.")
+    st.markdown("Log your thoughts. Harvey OS will analyze them for psychological patterns and store them as episodic memories.")
 
     reflection = st.text_area(
         "What's on your mind today?", height=150,
         placeholder="e.g. I noticed I kept avoiding the difficult conversation…",
         key="reflection_text",
     )
+
+    # Emotional tagging
+    col1, col2 = st.columns(2)
+    with col1:
+        emotion = st.selectbox("How are you feeling?", EMOTIONS, key="reflection_emotion")
+    with col2:
+        importance = st.slider("How significant is this?", 1, 10, 5, key="reflection_importance")
 
     if st.button("🔍 Analyze & Save", key="save_reflection", use_container_width=True):
         if not reflection.strip():
@@ -297,7 +339,24 @@ def tab_daily_reflection():
             profile.add_pattern(p)
 
         profile.add_reflection(reflection)
-        vector_store.add_memory(reflection)
+
+        # Store in vector memory with metadata
+        vector_store.add_memory(
+            reflection,
+            source="reflection",
+            importance=float(importance),
+            tags=detected,
+        )
+
+        # Store as episodic memory
+        episodes = EpisodicMemory()
+        episodes.record(
+            content=reflection,
+            category="general",
+            importance=float(importance),
+            emotion=emotion,
+            tags=detected,
+        )
 
         if detected:
             st.warning(f"Patterns detected: {', '.join(p.replace('_', ' ').title() for p in detected)}")
@@ -306,7 +365,7 @@ def tab_daily_reflection():
 
     # History
     profile = UserProfile()
-    reflections = profile.get("reflections", [])
+    reflections = profile.get_reflections(limit=10)
     if reflections:
         st.markdown("### Reflection History")
         for i, r in enumerate(reversed(reflections[-10:]), 1):
@@ -514,6 +573,228 @@ def tab_conversation_training():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# TAB 11 – Conversation Threads (NEW)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def tab_conversation_threads(brain: Brain, personality: str, voice: bool):
+    st.header("💬 Conversation Threads")
+    st.markdown("Have a continuous, threaded conversation with Harvey OS. He remembers everything in this thread.")
+
+    conv_memory = ConversationMemory()
+
+    # Thread management
+    col_new, col_list = st.columns([1, 3])
+    with col_new:
+        if st.button("🆕 New Thread", key="new_thread", use_container_width=True):
+            new_id = conv_memory.start_thread(title="New Conversation")
+            st.session_state["active_thread"] = new_id
+            st.rerun()
+
+    # Thread selector
+    threads = conv_memory.list_threads(limit=30)
+    if threads:
+        thread_names = [f"{t['title'][:40]} ({t['msg_count']} msgs)" for t in threads]
+        with col_list:
+            selected_idx = st.selectbox(
+                "Select thread", range(len(thread_names)),
+                format_func=lambda i: thread_names[i],
+                key="thread_selector",
+            )
+        active_thread_id = threads[selected_idx]["id"]
+        st.session_state["active_thread"] = active_thread_id
+
+        # Show thread messages
+        messages = conv_memory.get_messages(active_thread_id)
+        if messages:
+            st.markdown("---")
+            for msg in messages:
+                if msg["role"] == "user":
+                    st.markdown(f"**🗣️ You:** {msg['content']}")
+                elif msg["role"] == "assistant":
+                    st.markdown(f"**🤖 Harvey:** {msg['content']}")
+                elif msg["role"] == "system":
+                    st.caption(f"📋 {msg['content'][:100]}…")
+            st.markdown("---")
+
+        # Chat input
+        user_msg = ""
+        if voice:
+            col_v, col_t = st.columns([1, 4])
+            with col_v:
+                if st.button("🎙️ Speak", key="voice_thread"):
+                    user_msg = voice_input()
+            with col_t:
+                user_msg = st.text_area(
+                    "Your message", height=100, value=user_msg,
+                    placeholder="Type your message to Harvey...",
+                    key="thread_input",
+                )
+        else:
+            user_msg = st.text_area(
+                "Your message", height=100,
+                placeholder="Type your message to Harvey...",
+                key="thread_input",
+            )
+
+        if st.button("📤 Send", key="send_msg", use_container_width=True):
+            if user_msg.strip():
+                with st.spinner("Harvey is thinking…"):
+                    # Inject personality
+                    pers_prompt = get_personality_prompt(personality)
+                    original = brain._system_prompt
+                    brain._system_prompt = f"{original}\n\n{pers_prompt}"
+
+                    response = brain.think(
+                        user_msg,
+                        thread_id=active_thread_id,
+                    )
+
+                    brain._system_prompt = original
+
+                    # Also log to conversation training
+                    trainer = ConversationTrainer()
+                    trainer.add_conversation(user_msg, response, tag="thread_chat")
+
+                st.rerun()
+            else:
+                st.warning("Type a message first.")
+
+        # Thread stats
+        with st.expander("📊 Thread Stats"):
+            thread_info = conv_memory.get_thread(active_thread_id)
+            if thread_info:
+                st.markdown(f"**Thread ID:** `{active_thread_id}`")
+                st.markdown(f"**Created:** {thread_info['created_at']}")
+                st.markdown(f"**Messages:** {conv_memory.message_count(active_thread_id)}")
+                if thread_info.get("summary"):
+                    st.markdown(f"**Summary:** {thread_info['summary']}")
+    else:
+        st.info("No threads yet. Click '🆕 New Thread' to start a conversation.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAB 12 – Episodic Memory (NEW)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def tab_episodic_memory():
+    st.header("🧠 Episodic Memory")
+    st.markdown("Your life event timeline. Record significant events, and Harvey will use them for context in all future analyses.")
+
+    episodes_mgr = EpisodicMemory()
+
+    # Record new episode
+    with st.expander("➕ Record New Life Event", expanded=True):
+        content = st.text_area(
+            "What happened?", height=100,
+            placeholder="e.g. Got promoted to Senior Engineer at Acme Corp…",
+            key="ep_content",
+        )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            category = st.selectbox("Category", CATEGORIES, key="ep_category")
+        with col2:
+            emotion = st.selectbox("Emotion", EMOTIONS, key="ep_emotion")
+        with col3:
+            importance = st.slider("Importance (1-10)", 1, 10, 5, key="ep_importance")
+
+        tags_input = st.text_input(
+            "Tags (comma-separated)", key="ep_tags",
+            placeholder="e.g. career, milestone, promotion",
+        )
+
+        if st.button("💾 Record Episode", key="save_ep", use_container_width=True):
+            if content.strip():
+                tags = [t.strip() for t in tags_input.split(",") if t.strip()] if tags_input else []
+                ep_id = episodes_mgr.record(
+                    content=content,
+                    category=category,
+                    importance=float(importance),
+                    emotion=emotion,
+                    tags=tags,
+                )
+                # Also add to vector memory
+                vector_store.add_memory(
+                    content,
+                    source="episode",
+                    importance=float(importance),
+                    tags=tags,
+                )
+                st.success(f"Episode #{ep_id} recorded!")
+                st.rerun()
+            else:
+                st.warning("Describe the event first.")
+
+    # Memory stats
+    stats = episodes_mgr.stats()
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Total Episodes", stats["total_episodes"])
+    with col_b:
+        st.metric("Avg Importance", f"{stats['average_importance']}/10")
+    with col_c:
+        if st.button("🗑️ Prune Old Memories", key="prune_ep"):
+            pruned = episodes_mgr.prune()
+            st.info(f"Pruned {pruned} decayed memories.")
+
+    # Filters
+    st.markdown("### 📅 Episode Timeline")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        filter_cat = st.selectbox("Filter Category", ["All"] + CATEGORIES, key="ep_filter_cat")
+    with col_f2:
+        filter_emotion = st.selectbox("Filter Emotion", ["All"] + EMOTIONS, key="ep_filter_emo")
+    with col_f3:
+        filter_importance = st.slider("Min Importance", 0, 10, 0, key="ep_filter_imp")
+
+    results = episodes_mgr.recall(
+        category=filter_cat if filter_cat != "All" else None,
+        emotion=filter_emotion if filter_emotion != "All" else None,
+        min_importance=float(filter_importance),
+        limit=30,
+    )
+
+    if results:
+        for ep in results:
+            imp_stars = "⭐" * int(ep["importance"] // 2)
+            with st.expander(f"{ep['created_at'][:10]} | {ep['category'].title()} | {imp_stars} {ep['content'][:60]}…"):
+                st.markdown(f"**Event:** {ep['content']}")
+                st.markdown(f"**Category:** {ep['category'].title()}")
+                st.markdown(f"**Emotion:** {ep['emotion'].title()}")
+                st.markdown(f"**Importance:** {ep['importance']}/10")
+                if ep.get("tags"):
+                    st.markdown(f"**Tags:** {', '.join(ep['tags'])}")
+                st.caption(f"Recorded: {ep['created_at']}")
+                if ep.get("decay_at"):
+                    st.caption(f"⏳ Will decay: {ep['decay_at'][:10]}")
+    else:
+        st.info("No episodes match your filters.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DATA MIGRATION TAB
+# ═══════════════════════════════════════════════════════════════════════════
+
+def tab_data_migration():
+    st.header("🔄 Data Migration")
+    st.markdown("One-time migration of legacy JSON data into the new SQLite + ChromaDB database.")
+
+    st.warning("⚠️ Only run this once. It will import your existing JSON data into the new database.")
+
+    if st.button("🚀 Run Migration", key="run_migration", use_container_width=True):
+        with st.spinner("Migrating data…"):
+            from core.database import migrate_json_to_sqlite
+            counts = migrate_json_to_sqlite()
+
+            # Migrate FAISS to ChromaDB
+            faiss_count = vector_store.migrate_from_faiss()
+            counts["vector_memories"] = faiss_count
+
+        st.success("Migration complete!")
+        for table, count in counts.items():
+            st.markdown(f"• **{table}:** {count} records migrated")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -531,6 +812,9 @@ def main():
         "📈 Trajectory Forecast",
         "📊 Weekly Reports",
         "🧬 Conversation Training",
+        "💬 Threads",
+        "🧠 Episodic Memory",
+        "🔄 Migration",
     ])
 
     with tabs[0]:
@@ -553,6 +837,12 @@ def main():
         tab_weekly_reports()
     with tabs[9]:
         tab_conversation_training()
+    with tabs[10]:
+        tab_conversation_threads(brain, personality, voice)
+    with tabs[11]:
+        tab_episodic_memory()
+    with tabs[12]:
+        tab_data_migration()
 
 
 if __name__ == "__main__":

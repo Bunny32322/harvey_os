@@ -1,5 +1,5 @@
 """
-Harvey OS – Configuration & Settings
+Harvey OS – Configuration & Settings (v2)
 Manages mode switching, API endpoints, and project paths.
 """
 
@@ -32,7 +32,11 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 # ── Embedding Model ───────────────────────────────────────────────────────
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
-# ── Data File Paths ────────────────────────────────────────────────────────
+# ── Database ───────────────────────────────────────────────────────────────
+DATABASE_FILE = DATA_DIR / "harvey_os.db"
+CHROMA_DIR = DATA_DIR / "chromadb"
+
+# ── Legacy Data File Paths (for migration) ─────────────────────────────────
 MEMORY_FILE = DATA_DIR / "memory.json"
 HABITS_FILE = DATA_DIR / "habits.json"
 DECISIONS_FILE = DATA_DIR / "decisions.json"

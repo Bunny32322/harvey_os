@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend (deployed separately)
+frontend/
+
+# Git
+.git/
+.gitignore
+
+# Node
+node_modules/
+
+# Misc
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.antigravityignore

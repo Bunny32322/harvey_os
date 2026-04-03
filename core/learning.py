@@ -1,5 +1,5 @@
 """
-Harvey OS – Self-Improving Decision Learning
+Harvey OS – Self-Improving Decision Learning (v2 – SQLite-backed)
 Analyzes historical decisions to find patterns in successful strategies
 and update future recommendations.
 """
@@ -7,12 +7,9 @@ and update future recommendations.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from datetime import datetime
 
-from config.settings import DATA_DIR
-
-LEARNING_FILE = DATA_DIR / "learning_history.json"
+from core.database import get_db
 
 
 class DecisionLearner:
@@ -20,20 +17,6 @@ class DecisionLearner:
 
     def __init__(self, decisions: list[dict] | None = None):
         self.decisions = decisions or []
-        self.insights: list[dict] = self._load_history()
-
-    # ── persistence ─────────────────────────────────────────────────────
-    def _load_history(self) -> list[dict]:
-        try:
-            with open(LEARNING_FILE, "r", encoding="utf-8") as fh:
-                return json.load(fh)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
-
-    def _save_history(self) -> None:
-        LEARNING_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(LEARNING_FILE, "w", encoding="utf-8") as fh:
-            json.dump(self.insights, fh, indent=4, ensure_ascii=False)
 
     # ── analysis ────────────────────────────────────────────────────────
     def analyze(self, decisions: list[dict] | None = None) -> dict:
@@ -85,9 +68,14 @@ class DecisionLearner:
             "timestamp": datetime.now().isoformat(),
         }
 
-        # Persist insight
-        self.insights.append(result)
-        self._save_history()
+        # Persist insight to SQLite
+        db = get_db()
+        db.execute(
+            "INSERT INTO learning_history (insights, created_at) VALUES (?, ?)",
+            (json.dumps(result), result["timestamp"]),
+        )
+        db.commit()
+
         return result
 
     def summary(self, decisions: list[dict] | None = None) -> str:

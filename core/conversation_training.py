@@ -1,56 +1,61 @@
 """
-Harvey OS – Conversation Training
+Harvey OS – Conversation Training (v2 – SQLite-backed)
 Analyze past conversations to extract decision patterns, psychological
 patterns, recurring problems, and strategic tendencies.
-Stores conversation history in data/conversations.json and feeds
-extracted insights into vector memory.
 """
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from pathlib import Path
 
-from config.settings import DATA_DIR
+from core.database import get_db
 from core.psychology import PatternAnalyzer
 from core import vector_store
 
-CONVERSATIONS_FILE = DATA_DIR / "conversations.json"
-
 
 class ConversationTrainer:
-    """Mine past conversations for strategic insights."""
+    """Mine past conversations for strategic insights (SQLite-backed)."""
 
     def __init__(self):
-        self.conversations: list[dict] = self._load()
         self.analyzer = PatternAnalyzer()
+        self.conversations: list[dict] = self._load()
 
     # ── persistence ─────────────────────────────────────────────────────
     def _load(self) -> list[dict]:
-        try:
-            with open(CONVERSATIONS_FILE, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            return data if isinstance(data, list) else []
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
-
-    def save(self) -> None:
-        CONVERSATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONVERSATIONS_FILE, "w", encoding="utf-8") as fh:
-            json.dump(self.conversations, fh, indent=4, ensure_ascii=False)
+        """Load conversation log from SQLite."""
+        db = get_db()
+        rows = db.execute(
+            "SELECT * FROM conversation_log ORDER BY created_at ASC"
+        ).fetchall()
+        return [
+            {
+                "timestamp": r["created_at"],
+                "user": r["user_input"],
+                "ai": r["ai_response"],
+                "tag": r["tag"],
+            }
+            for r in rows
+        ]
 
     # ── record ──────────────────────────────────────────────────────────
     def add_conversation(self, user_input: str, ai_response: str, tag: str = "") -> None:
         """Log a conversation turn."""
+        db = get_db()
+        now = datetime.now().isoformat()
+        db.execute(
+            """INSERT INTO conversation_log (user_input, ai_response, tag, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (user_input, ai_response, tag, now),
+        )
+        db.commit()
+
         entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now,
             "user": user_input,
             "ai": ai_response,
             "tag": tag,
         }
         self.conversations.append(entry)
-        self.save()
 
     # ── analysis ────────────────────────────────────────────────────────
     def extract_insights(self) -> dict:
@@ -102,13 +107,17 @@ class ConversationTrainer:
             top_pattern = max(psych_counts, key=psych_counts.get)
             vector_store.add_memory(
                 f"[Conversation Training] Dominant psychological pattern: "
-                f"{top_pattern} (detected {psych_counts[top_pattern]} times)"
+                f"{top_pattern} (detected {psych_counts[top_pattern]} times)",
+                source="conversation_training",
+                importance=7.0,
             )
         if tendencies:
             top_tendency = max(tendencies, key=tendencies.get)
             vector_store.add_memory(
                 f"[Conversation Training] Dominant strategic tendency: "
-                f"{top_tendency} (observed {tendencies[top_tendency]} times)"
+                f"{top_tendency} (observed {tendencies[top_tendency]} times)",
+                source="conversation_training",
+                importance=7.0,
             )
 
         return {
