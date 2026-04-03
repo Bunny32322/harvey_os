@@ -3,6 +3,10 @@ Harvey OS – Vector Memory (ChromaDB)
 Upgraded from FAISS to ChromaDB for persistent, metadata-aware
 semantic search. Supports temporal filtering, importance weighting,
 and tagged retrieval.
+
+NOTE: On low-memory environments (Render free tier), ChromaDB + 
+sentence-transformers may fail to load. All functions gracefully 
+degrade to return empty results instead of crashing.
 """
 
 from __future__ import annotations
@@ -19,6 +23,20 @@ CHROMA_DIR = DATA_DIR / "chromadb"
 _client = None
 _collection = None
 _embed_fn = None
+_available = None  # None = not checked yet, True/False after check
+
+
+def _check_available() -> bool:
+    """Check if ChromaDB + sentence-transformers can be loaded."""
+    global _available
+    if _available is not None:
+        return _available
+    try:
+        import chromadb
+        _available = True
+    except ImportError:
+        _available = False
+    return _available
 
 
 def _get_embed_fn():
@@ -57,33 +75,30 @@ def add_memory(
 ) -> str:
     """
     Encode and store a memory with metadata.
-
-    Args:
-        text:       The memory content
-        source:     Origin (e.g. 'strategic_engine', 'reflection', 'episode')
-        importance: 1-10 importance score
-        tags:       Optional tags for filtering
-
-    Returns:
-        The memory ID (string).
+    Returns the memory ID (string), or empty string if unavailable.
     """
-    collection = _get_collection()
-    now = datetime.now().isoformat()
-    mem_id = f"mem_{collection.count()}_{now.replace(':', '-')}"
+    if not _check_available():
+        return ""
+    try:
+        collection = _get_collection()
+        now = datetime.now().isoformat()
+        mem_id = f"mem_{collection.count()}_{now.replace(':', '-')}"
 
-    metadata = {
-        "source": source,
-        "importance": float(importance),
-        "created_at": now,
-        "tags": ",".join(tags) if tags else "",
-    }
+        metadata = {
+            "source": source,
+            "importance": float(importance),
+            "created_at": now,
+            "tags": ",".join(tags) if tags else "",
+        }
 
-    collection.add(
-        documents=[text],
-        metadatas=[metadata],
-        ids=[mem_id],
-    )
-    return mem_id
+        collection.add(
+            documents=[text],
+            metadatas=[metadata],
+            ids=[mem_id],
+        )
+        return mem_id
+    except Exception:
+        return ""
 
 
 def search_memory(
@@ -94,96 +109,102 @@ def search_memory(
 ) -> list[dict]:
     """
     Semantic search for memories matching the query.
-
-    Args:
-        query:          Search text
-        top_k:          Number of results
-        source:         Filter by source
-        min_importance: Minimum importance threshold
-
-    Returns:
-        List of dicts with 'text', 'distance', and 'metadata'.
+    Returns empty list if ChromaDB is unavailable.
     """
-    collection = _get_collection()
-    if collection.count() == 0:
+    if not _check_available():
         return []
-
-    # Build where filter
-    where = None
-    conditions = []
-    if source:
-        conditions.append({"source": {"$eq": source}})
-    if min_importance > 0:
-        conditions.append({"importance": {"$gte": min_importance}})
-
-    if len(conditions) == 1:
-        where = conditions[0]
-    elif len(conditions) > 1:
-        where = {"$and": conditions}
-
-    k = min(top_k, collection.count())
-
     try:
-        results = collection.query(
-            query_texts=[query],
-            n_results=k,
-            where=where,
-        )
+        collection = _get_collection()
+        if collection.count() == 0:
+            return []
+
+        # Build where filter
+        where = None
+        conditions = []
+        if source:
+            conditions.append({"source": {"$eq": source}})
+        if min_importance > 0:
+            conditions.append({"importance": {"$gte": min_importance}})
+
+        if len(conditions) == 1:
+            where = conditions[0]
+        elif len(conditions) > 1:
+            where = {"$and": conditions}
+
+        k = min(top_k, collection.count())
+
+        try:
+            results = collection.query(
+                query_texts=[query],
+                n_results=k,
+                where=where,
+            )
+        except Exception:
+            results = collection.query(
+                query_texts=[query],
+                n_results=k,
+            )
+
+        memories: list[dict] = []
+        if results and results["documents"] and results["documents"][0]:
+            for i, doc in enumerate(results["documents"][0]):
+                entry = {
+                    "text": doc,
+                    "distance": results["distances"][0][i] if results.get("distances") else 0,
+                    "metadata": results["metadatas"][0][i] if results.get("metadatas") else {},
+                }
+                memories.append(entry)
+        return memories
     except Exception:
-        # Fallback without filters if metadata filtering fails
-        results = collection.query(
-            query_texts=[query],
-            n_results=k,
-        )
-
-    memories: list[dict] = []
-    if results and results["documents"] and results["documents"][0]:
-        for i, doc in enumerate(results["documents"][0]):
-            entry = {
-                "text": doc,
-                "distance": results["distances"][0][i] if results.get("distances") else 0,
-                "metadata": results["metadatas"][0][i] if results.get("metadatas") else {},
-            }
-            memories.append(entry)
-
-    return memories
+        return []
 
 
 def search_memory_text(query: str, top_k: int = 3) -> list[str]:
     """
     Backward-compatible: return just the text strings.
-    Drop-in replacement for the old FAISS-based search_memory().
     """
     results = search_memory(query, top_k=top_k)
     return [r["text"] for r in results]
 
 
 def memory_count() -> int:
-    """Return the number of stored memories."""
-    collection = _get_collection()
-    return collection.count()
+    """Return the number of stored memories. 0 if unavailable."""
+    if not _check_available():
+        return 0
+    try:
+        collection = _get_collection()
+        return collection.count()
+    except Exception:
+        return 0
 
 
 def get_all_memories(limit: int = 100) -> list[dict]:
     """Retrieve all memories (for admin/debugging)."""
-    collection = _get_collection()
-    if collection.count() == 0:
+    if not _check_available():
         return []
-    results = collection.get(limit=limit, include=["documents", "metadatas"])
-    memories = []
-    for i, doc in enumerate(results["documents"]):
-        memories.append({
-            "id": results["ids"][i],
-            "text": doc,
-            "metadata": results["metadatas"][i] if results.get("metadatas") else {},
-        })
-    return memories
+    try:
+        collection = _get_collection()
+        if collection.count() == 0:
+            return []
+        results = collection.get(limit=limit, include=["documents", "metadatas"])
+        memories = []
+        for i, doc in enumerate(results["documents"]):
+            memories.append({
+                "id": results["ids"][i],
+                "text": doc,
+                "metadata": results["metadatas"][i] if results.get("metadatas") else {},
+            })
+        return memories
+    except Exception:
+        return []
 
 
 def delete_memory(memory_id: str) -> bool:
     """Delete a specific memory by ID."""
-    collection = _get_collection()
+    if not _check_available():
+        return False
     try:
+        collection = _get_collection()
         collection.delete(ids=[memory_id])
         return True
     except Exception:
@@ -196,9 +217,11 @@ def migrate_from_faiss() -> int:
     """
     One-time migration: read existing FAISS vector store
     and import texts into ChromaDB.
-
     Returns count of migrated memories.
     """
+    if not _check_available():
+        return 0
+
     import pickle
     from config.settings import VECTOR_STORE_FILE
 

@@ -3,7 +3,7 @@ import axios from "axios";
 // Axios client connected to the existing FastAPI backend
 const apiClient = axios.create({
   baseURL: "https://harvey-os.onrender.com",
-  timeout: 10000,
+  timeout: 120000,
 });
 
 export interface AnalyzeResponse {
